@@ -15,8 +15,10 @@ from diabetic_foot_agent.dfuc_model import DFUCModelConfig, train_dfuc_baseline
 def main() -> None:
     output_dir = PROJECT_ROOT / "artifacts" / "dfuc_baseline"
     metadata = train_dfuc_baseline(output_dir=output_dir, config=DFUCModelConfig())
-    print(f"Saved weights to {metadata['weights_path']}")
+    print(f"Saved best checkpoint to {metadata['best_checkpoint_path']}")
+    print(f"Saved last checkpoint to {metadata['last_checkpoint_path']}")
     print(f"Train samples: {metadata['train_samples']}")
+    print(f"Validation samples: {metadata['validation_samples']}")
     print(f"Loss history: {metadata['loss_history']}")
 
 
