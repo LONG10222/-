@@ -157,6 +157,21 @@ def _render_dfuc_workspace() -> None:
     metric2.metric("已配对掩膜", summary["paired_count"])
     metric3.metric("未配对原图", summary["unpaired_count"])
 
+    training_summary = load_dfuc_training_metadata(PROJECT_ROOT / "artifacts" / "dfuc_baseline")
+    if training_summary is not None:
+        st.markdown("**训练面板**")
+        metric1, metric2, metric3 = st.columns(3)
+        metric1.metric("训练样本", training_summary.get("train_samples", "NA"))
+        metric2.metric("验证样本", training_summary.get("validation_samples", "NA"))
+        metric3.metric("最佳验证损失", f"{training_summary.get('best_val_loss', 0):.4f}" if training_summary.get("best_val_loss") is not None else "NA")
+
+        loss_history = training_summary.get("loss_history") or []
+        if loss_history:
+            history_df = pd.DataFrame(loss_history)
+            st.line_chart(history_df.set_index("epoch")[["train_loss", "val_loss"]], use_container_width=True)
+            st.line_chart(history_df.set_index("epoch")[["train_iou", "val_iou", "train_dice", "val_dice"]], use_container_width=True)
+            st.dataframe(history_df, hide_index=True, use_container_width=True)
+
     if st.button("刷新 DFUC 索引", use_container_width=False):
         refreshed = save_dfuc_index()
         st.success(f"已刷新 DFUC 索引，共 {len(refreshed)} 条样本。")

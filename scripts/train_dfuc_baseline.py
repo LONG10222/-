@@ -19,6 +19,7 @@ def main() -> None:
     print(f"Saved last checkpoint to {metadata['last_checkpoint_path']}")
     print(f"Train samples: {metadata['train_samples']}")
     print(f"Validation samples: {metadata['validation_samples']}")
+    print(f"Best val loss: {metadata['best_val_loss']}")
     print(f"Loss history: {metadata['loss_history']}")
 
 

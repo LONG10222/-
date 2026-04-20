@@ -96,7 +96,11 @@ def build_markdown_report(
             lines.extend(
                 [
                     f"- 最后一轮训练损失：{last_epoch.get('train_loss', 'NA')}",
+                    f"- 最后一轮训练 IoU：{last_epoch.get('train_iou', 'NA')}",
+                    f"- 最后一轮训练 Dice：{last_epoch.get('train_dice', 'NA')}",
                     f"- 最后一轮验证损失：{last_epoch.get('val_loss', 'NA')}",
+                    f"- 最后一轮验证 IoU：{last_epoch.get('val_iou', 'NA')}",
+                    f"- 最后一轮验证 Dice：{last_epoch.get('val_dice', 'NA')}",
                 ]
             )
         lines.append("")

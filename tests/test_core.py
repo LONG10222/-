@@ -141,3 +141,17 @@ def test_load_dfuc_training_metadata_reads_json(tmp_path) -> None:
 
     metadata = load_dfuc_training_metadata(artifacts_dir)
     assert metadata == {"train_samples": 3, "validation_samples": 1}
+
+
+def test_dfuc_training_history_can_store_segmentation_metrics(tmp_path) -> None:
+    artifacts_dir = tmp_path / "dfuc_baseline"
+    artifacts_dir.mkdir(parents=True)
+    metadata_path = artifacts_dir / "dfuc_baseline.json"
+    metadata_path.write_text(
+        '{"loss_history":[{"epoch":1,"train_loss":0.8,"train_iou":0.5,"train_dice":0.6,"val_loss":0.9,"val_iou":0.4,"val_dice":0.5}]}',
+        encoding="utf-8",
+    )
+
+    metadata = load_dfuc_training_metadata(artifacts_dir)
+    assert metadata["loss_history"][0]["train_iou"] == 0.5
+    assert metadata["loss_history"][0]["val_dice"] == 0.5

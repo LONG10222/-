@@ -34,6 +34,8 @@ class DFUCModelConfig:
     learning_rate: float = 1e-3
     validation_split: float = 0.2
     random_seed: int = 42
+    bce_weight: float = 0.5
+    dice_weight: float = 0.5
 
 
 class _DoubleConv:
@@ -156,6 +158,66 @@ def _evaluate_loss(model: Any, dataloader: Any, criterion: Any, torch: Any) -> f
     return total_loss / max(batch_count, 1)
 
 
+def _dice_loss(logits: Any, targets: Any, torch: Any, eps: float = 1e-6) -> Any:
+    probs = torch.sigmoid(logits)
+    probs = probs.reshape(probs.shape[0], -1)
+    targets = targets.reshape(targets.shape[0], -1)
+    intersection = (probs * targets).sum(dim=1)
+    denominator = probs.sum(dim=1) + targets.sum(dim=1)
+    dice = (2 * intersection + eps) / (denominator + eps)
+    return 1 - dice.mean()
+
+
+def _combined_segmentation_loss(logits: Any, targets: Any, criterion: Any, torch: Any, config: DFUCModelConfig) -> Any:
+    bce = criterion(logits, targets)
+    dice = _dice_loss(logits, targets, torch)
+    return config.bce_weight * bce + config.dice_weight * dice
+
+
+def _compute_segmentation_metrics(logits: Any, targets: Any, torch: Any, eps: float = 1e-6) -> dict[str, float]:
+    probs = torch.sigmoid(logits)
+    preds = (probs >= 0.5).float()
+    preds = preds.reshape(preds.shape[0], -1)
+    targets = targets.reshape(targets.shape[0], -1)
+
+    intersection = (preds * targets).sum(dim=1)
+    union = preds.sum(dim=1) + targets.sum(dim=1) - intersection
+    iou = ((intersection + eps) / (union + eps)).mean().item()
+    dice = ((2 * intersection + eps) / (preds.sum(dim=1) + targets.sum(dim=1) + eps)).mean().item()
+    foreground_ratio = targets.mean().item()
+    return {
+        "iou": float(iou),
+        "dice": float(dice),
+        "foreground_ratio": float(foreground_ratio),
+    }
+
+
+def _evaluate_segmentation(model: Any, dataloader: Any, criterion: Any, torch: Any, config: DFUCModelConfig) -> dict[str, float]:
+    if dataloader is None:
+        return {"loss": 0.0, "iou": 0.0, "dice": 0.0}
+
+    model.eval()
+    total_loss = 0.0
+    total_iou = 0.0
+    total_dice = 0.0
+    batch_count = 0
+    with torch.no_grad():
+        for images, masks in dataloader:
+            logits = model(images)
+            loss = _combined_segmentation_loss(logits, masks, criterion, torch, config)
+            metrics = _compute_segmentation_metrics(logits, masks, torch)
+            total_loss += float(loss.item())
+            total_iou += metrics["iou"]
+            total_dice += metrics["dice"]
+            batch_count += 1
+
+    return {
+        "loss": total_loss / max(batch_count, 1),
+        "iou": total_iou / max(batch_count, 1),
+        "dice": total_dice / max(batch_count, 1),
+    }
+
+
 def train_dfuc_baseline(
     output_dir: Path,
     config: DFUCModelConfig | None = None,
@@ -190,18 +252,39 @@ def train_dfuc_baseline(
     for epoch in range(config.epochs):
         model.train()
         train_loss = 0.0
+        train_iou = 0.0
+        train_dice = 0.0
         batch_count = 0
         for images, masks in train_loader:
             optimizer.zero_grad()
             logits = model(images)
-            loss = criterion(logits, masks)
+            loss = _combined_segmentation_loss(logits, masks, criterion, torch, config)
             loss.backward()
             optimizer.step()
             train_loss += float(loss.item())
+            metrics = _compute_segmentation_metrics(logits.detach(), masks, torch)
+            train_iou += metrics["iou"]
+            train_dice += metrics["dice"]
             batch_count += 1
         train_loss = train_loss / max(batch_count, 1)
-        val_loss = _evaluate_loss(model, val_loader, criterion, torch) if val_loader is not None else train_loss
-        history.append({"epoch": epoch + 1, "train_loss": train_loss, "val_loss": val_loss})
+        train_iou = train_iou / max(batch_count, 1)
+        train_dice = train_dice / max(batch_count, 1)
+        val_metrics = _evaluate_segmentation(model, val_loader, criterion, torch, config) if val_loader is not None else {
+            "loss": train_loss,
+            "iou": train_iou,
+            "dice": train_dice,
+        }
+        history.append(
+            {
+                "epoch": epoch + 1,
+                "train_loss": train_loss,
+                "train_iou": train_iou,
+                "train_dice": train_dice,
+                "val_loss": val_metrics["loss"],
+                "val_iou": val_metrics["iou"],
+                "val_dice": val_metrics["dice"],
+            }
+        )
 
         checkpoint = {
             "model_state_dict": model.state_dict(),
@@ -209,11 +292,15 @@ def train_dfuc_baseline(
             "epoch": epoch + 1,
             "config": asdict(config),
             "train_loss": train_loss,
-            "val_loss": val_loss,
+            "train_iou": train_iou,
+            "train_dice": train_dice,
+            "val_loss": val_metrics["loss"],
+            "val_iou": val_metrics["iou"],
+            "val_dice": val_metrics["dice"],
         }
         torch.save(checkpoint, last_path)
-        if best_val_loss is None or val_loss <= best_val_loss:
-            best_val_loss = val_loss
+        if best_val_loss is None or val_metrics["loss"] <= best_val_loss:
+            best_val_loss = val_metrics["loss"]
             torch.save(checkpoint, best_path)
 
     metadata_path = output_dir / "dfuc_baseline.json"
@@ -224,6 +311,7 @@ def train_dfuc_baseline(
         "loss_history": history,
         "last_checkpoint_path": str(last_path),
         "best_checkpoint_path": str(best_path),
+        "best_val_loss": best_val_loss,
     }
     metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     return metadata
