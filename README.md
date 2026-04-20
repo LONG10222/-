@@ -354,6 +354,7 @@ flowchart LR
 - `data/processed/nhanes_risk_base.csv`：第一版 NHANES 风险底表
 - `app/streamlit_app.py`：可直接运行的网页原型
 - `scripts/fetch_nhanes.sh`：NHANES 下载脚本
+- `scripts/fetch_nhanes.ps1`：Windows PowerShell 下的 NHANES 下载脚本
 - `scripts/prepare_nhanes.py`：NHANES 合并与底表生成脚本
 - `scripts/prepare_nhanes_features.py`：NHANES 参考特征表生成脚本
 - `src/diabetic_foot_agent/`：风险评估、图像分析、知识问答、报告生成代码
@@ -403,6 +404,14 @@ streamlit run app/streamlit_app.py
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/rebuild_env.ps1
+```
+
+如需在 Windows 下重新下载主线 NHANES 原始文件，可执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/fetch_nhanes.ps1 -Force
+python scripts/prepare_nhanes.py
+python scripts/prepare_nhanes_features.py
 ```
 
 ### macOS / Linux

@@ -1,6 +1,6 @@
 # 数据目录说明
 
-当前仓库只放数据说明、字段设计和图谱种子，不直接附带 NHANES、DFUC、STANDUP 原始数据。
+当前仓库已附带主线所需的 NHANES 原始数据与处理后文件，便于直接运行；DFUC、STANDUP 等扩展数据仍需后续单独申请或下载。
 
 当前项目强调的是“多源异构数据资源组织”，而不是把不同来源强行拼成一个患者级统一总表。
 
@@ -27,4 +27,3 @@
 - `schema/dataset_schema.yaml`：定义统一字段 schema。
 - `schema/field_mapping.csv`：定义统一字段与来源字段的映射关系。
 - `schema/knowledge_graph_seed.json`：提供知识图谱种子三元组。
-
