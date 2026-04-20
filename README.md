@@ -30,11 +30,11 @@
 
 ### 扩展 1
 
-- DFUC 足溃疡图像演示模块
+- DFUC 足溃疡图像演示模块（首选图像扩展路线）
 
 ### 扩展 2
 
-- 热成像与传感器接口预留
+- 热成像与传感器接口预留（保留为扩展说明）
 
 这样的拆分可以保证答辩时逻辑清楚：
 
@@ -351,10 +351,13 @@ flowchart LR
 - `data/schema/dataset_schema.yaml`：异构数据统一字段设计
 - `data/schema/knowledge_graph_seed.json`：知识图谱种子三元组
 - `data/raw/nhanes/`：已下载的 NHANES 主线原始文件
+- `data/raw/dfuc/`：DFUC 图像扩展数据预留目录
 - `data/processed/nhanes_risk_base.csv`：第一版 NHANES 风险底表
+- `data/processed/dfuc_image_index.csv`：DFUC 本地图像索引（放入图像后可生成）
 - `app/streamlit_app.py`：可直接运行的网页原型
 - `scripts/fetch_nhanes.sh`：NHANES 下载脚本
 - `scripts/fetch_nhanes.ps1`：Windows PowerShell 下的 NHANES 下载脚本
+- `scripts/prepare_dfuc_index.py`：DFUC 本地样本索引生成脚本
 - `scripts/prepare_nhanes.py`：NHANES 合并与底表生成脚本
 - `scripts/prepare_nhanes_features.py`：NHANES 参考特征表生成脚本
 - `src/diabetic_foot_agent/`：风险评估、图像分析、知识问答、报告生成代码

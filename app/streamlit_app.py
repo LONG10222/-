@@ -17,9 +17,14 @@ from diabetic_foot_agent import (
     analyze_foot_image,
     answer_question,
     build_markdown_report,
+    get_dfuc_sample_options,
+    get_dfuc_summary,
     build_sample_options,
     evaluate_risk,
+    get_dfuc_preview_samples,
+    get_extension_dataset_statuses,
     get_cohort_summary,
+    save_dfuc_index,
 )
 from diabetic_foot_agent.models import PatientProfile
 
@@ -78,9 +83,9 @@ def render_overview() -> None:
         st.subheader("公开数据来源")
         st.markdown(
             "- NHANES：结构化临床与风险因素\n"
+            "- DFUC：首选图像扩展路线\n"
             "- IDF / CDC / ADA：知识证据来源\n"
-            "- DFUC：可选图像扩展\n"
-            "- STANDUP：热成像接口预留"
+            "- STANDUP：热成像扩展说明"
         )
     with col2:
         st.subheader("当前 MVP")
@@ -88,9 +93,111 @@ def render_overview() -> None:
             "1. 风险问卷评估\n"
             "2. 知识图谱问答\n"
             "3. 综合报告生成\n"
-            "4. 可选扩展：足部图像演示"
+            "4. 可选扩展：图像 / DFUC / 热成像入口"
         )
         st.info("说明：当前版本为课程演示原型，主线聚焦风险提示、知识问答和综合报告。")
+
+
+def _render_extension_dataset_status(dataset_key: str) -> None:
+    status = {item.key: item for item in get_extension_dataset_statuses()}[dataset_key]
+
+    st.subheader(status.name)
+    metric1, metric2, metric3, metric4 = st.columns(4)
+    metric1.metric("本地状态", "已接入" if status.available else "未接入")
+    metric2.metric("文件数", status.file_count)
+    metric3.metric("图像数", status.image_count)
+    metric4.metric("掩膜/标注图像", status.mask_count)
+
+    st.caption(f"目录位置：{status.root_path}")
+
+    if status.manifests_found:
+        st.write("检测到的元数据文件：" + "、".join(status.manifests_found))
+    else:
+        st.write("尚未检测到元数据文件，可后续补充 `metadata.csv`、`splits.csv` 或类似清单。")
+
+    if status.example_files:
+        st.markdown("**已发现示例文件**")
+        for item in status.example_files:
+            st.write(f"- {item}")
+    else:
+        st.warning("当前目录只有说明文件，尚未检测到可用图像或元数据。")
+
+    st.markdown("**接入说明**")
+    for note in status.notes:
+        st.write(f"- {note}")
+
+
+def _render_dfuc_sample_preview() -> None:
+    preview_limit = st.slider("预览样本数", min_value=3, max_value=12, value=6, step=3)
+    previews = get_dfuc_preview_samples(limit=preview_limit)
+
+    if not previews:
+        st.info("当前尚未检测到 DFUC 图像样本。把图片放入 `data/raw/dfuc/images/` 后，这里会自动显示预览。")
+        return
+
+    st.markdown("**样本预览**")
+    for index in range(0, len(previews), 3):
+        columns = st.columns(3)
+        for column, sample in zip(columns, previews[index:index + 3]):
+            with column:
+                st.image(str(sample.image_path), caption=f"{sample.sample_id} | 原图", use_container_width=True)
+                if sample.mask_path is not None:
+                    st.image(str(sample.mask_path), caption=f"{sample.sample_id} | 掩膜", use_container_width=True)
+                else:
+                    st.caption("未检测到对应掩膜")
+
+
+def _render_dfuc_workspace() -> None:
+    summary = get_dfuc_summary()
+    metric1, metric2, metric3 = st.columns(3)
+    metric1.metric("DFUC 样本数", summary["sample_count"])
+    metric2.metric("已配对掩膜", summary["paired_count"])
+    metric3.metric("未配对原图", summary["unpaired_count"])
+
+    if st.button("刷新 DFUC 索引", use_container_width=False):
+        refreshed = save_dfuc_index()
+        st.success(f"已刷新 DFUC 索引，共 {len(refreshed)} 条样本。")
+
+    sample_options = get_dfuc_sample_options()
+    if not sample_options:
+        st.info("当前还没有可索引的 DFUC 图像。请先把图片放入 `data/raw/dfuc/images/`。")
+        return
+
+    label_to_sample = {label: sample for label, sample in sample_options}
+    selected_label = st.selectbox("选择 DFUC 样本", list(label_to_sample.keys()))
+    selected_sample = label_to_sample[selected_label]
+
+    dfuc_root = PROJECT_ROOT / "data" / "raw" / "dfuc"
+    image_path = dfuc_root / str(selected_sample["image_path"])
+    mask_value = str(selected_sample.get("mask_path", "")).strip()
+    mask_path = dfuc_root / mask_value if mask_value else None
+
+    preview_col1, preview_col2 = st.columns(2)
+    with preview_col1:
+        st.image(str(image_path), caption=f"{selected_sample['sample_id']} | 原图", use_container_width=True)
+    with preview_col2:
+        if mask_path and mask_path.exists():
+            st.image(str(mask_path), caption=f"{selected_sample['sample_id']} | 掩膜", use_container_width=True)
+        else:
+            st.info("当前样本未检测到对应掩膜。")
+
+    st.caption(
+        f"原图路径：{selected_sample['image_path']} | "
+        f"掩膜：{selected_sample['mask_path'] or '无'}"
+    )
+
+    if st.button("使用该 DFUC 样本执行演示分析", use_container_width=False):
+        image = Image.open(image_path)
+        result = analyze_foot_image(
+            image,
+            "RGB",
+            source_context="DFUC 本地样本演示",
+            sample_id=str(selected_sample["sample_id"]),
+            source_path=str(selected_sample["image_path"]),
+        )
+        st.session_state["image_result"] = result
+        st.session_state["image_preview"] = image
+        st.success("已将所选 DFUC 样本载入图像演示分析。")
 
 
 def render_risk_page() -> None:
@@ -190,37 +297,92 @@ def render_risk_page() -> None:
 
 
 def render_image_page() -> None:
-    st.header("足部图像分析")
-    modality = st.selectbox("图像模态", ["RGB", "热成像"])
-    uploaded_file = st.file_uploader("上传足部图像", type=["png", "jpg", "jpeg"])
+    st.header("扩展入口：图像 / DFUC / 热成像")
+    st.caption("扩展页用于图像演示和后续数据接入，不替代主线风险评分。")
 
-    if st.button("执行图像分析", use_container_width=False):
-        if not uploaded_file:
-            st.warning("请先上传图像。")
-        else:
-            image = Image.open(io.BytesIO(uploaded_file.read()))
-            result = analyze_foot_image(image, modality)
-            st.session_state["image_result"] = result
-            st.session_state["image_preview"] = image
+    tab_demo, tab_dfuc, tab_thermal = st.tabs(["图像演示", "DFUC 数据入口", "热成像入口"])
 
-    image_result = st.session_state.get("image_result")
-    preview = st.session_state.get("image_preview")
-    if preview is not None:
-        st.image(preview, caption="上传图像预览", width=320)
-
-    if image_result:
-        st.subheader("图像提示结果")
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.write(image_result.summary)
-            for finding in image_result.findings:
-                st.write(f"- {finding}")
-        with col2:
-            st.metric("提示等级", image_result.alert_level)
-        metrics_df = pd.DataFrame(
-            [{"metric": key, "value": value} for key, value in image_result.metrics.items()]
+    with tab_demo:
+        source_context = st.selectbox(
+            "演示场景",
+            ["居家 RGB 拍照演示", "DFUC 风格溃疡图像演示", "热成像研究接口演示"],
         )
-        st.dataframe(metrics_df, hide_index=True, use_container_width=True)
+        modality = st.selectbox("图像模态", ["RGB", "热成像"])
+        uploaded_file = st.file_uploader("上传足部图像", type=["png", "jpg", "jpeg"])
+
+        if source_context == "DFUC 风格溃疡图像演示":
+            st.info("当前仅做启发式异常提示，不做真实分割推理；若后续接入 DFUC，可在此页替换为分割模型。")
+        elif source_context == "热成像研究接口演示":
+            st.info("当前热成像逻辑仅基于亮度统计与热点差值做演示，后续可替换为真实热特征流程。")
+
+        if st.button("执行图像分析", use_container_width=False):
+            if not uploaded_file:
+                st.warning("请先上传图像。")
+            else:
+                image = Image.open(io.BytesIO(uploaded_file.read()))
+                result = analyze_foot_image(
+                    image,
+                    modality,
+                    source_context=source_context,
+                    sample_id="manual_upload",
+                    source_path=uploaded_file.name,
+                )
+                st.session_state["image_result"] = result
+                st.session_state["image_preview"] = image
+
+        image_result = st.session_state.get("image_result")
+        preview = st.session_state.get("image_preview")
+        if preview is not None:
+            st.image(preview, caption="上传图像预览", width=320)
+
+        if image_result:
+            st.subheader("图像提示结果")
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                if image_result.source_context:
+                    st.write(f"来源场景：{image_result.source_context}")
+                if image_result.sample_id and image_result.sample_id != "manual_upload":
+                    st.write(f"样本编号：{image_result.sample_id}")
+                if image_result.source_path:
+                    st.caption(f"来源路径：{image_result.source_path}")
+                st.write(image_result.summary)
+                for finding in image_result.findings:
+                    st.write(f"- {finding}")
+            with col2:
+                st.metric("提示等级", image_result.alert_level)
+            metrics_df = pd.DataFrame(
+                [{"metric": key, "value": value} for key, value in image_result.metrics.items()]
+            )
+            st.dataframe(metrics_df, hide_index=True, use_container_width=True)
+
+    with tab_dfuc:
+        _render_extension_dataset_status("dfuc")
+        st.markdown("**DFUC 首选接入路线**")
+        st.write("当前图像扩展优先围绕 DFUC 本地数据目录组织和样本演示展开；热成像继续保留为次级扩展入口。")
+        st.code(
+            "data/raw/dfuc/\n"
+            "  images/\n"
+            "  masks/\n"
+            "  metadata.csv\n"
+            "  splits.csv",
+            language="text",
+        )
+        st.caption("如后续拿到 DFUC 许可数据，优先保持图像与掩膜目录分离，并补一份样本划分文件。")
+        _render_dfuc_workspace()
+        _render_dfuc_sample_preview()
+
+    with tab_thermal:
+        _render_extension_dataset_status("standup")
+        st.info("热成像目前保留为扩展入口，不参与当前 DFUC 优先路线下的主图像演示流程。")
+        st.code(
+            "data/raw/standup/\n"
+            "  rgb/\n"
+            "  thermal/\n"
+            "  metadata.csv\n"
+            "  subjects.csv",
+            language="text",
+        )
+        st.caption("如后续接入热成像设备或研究数据，建议统一样本命名，便于 RGB 与热图做一一映射。")
 
 
 def render_qa_page() -> None:
@@ -255,8 +417,9 @@ def render_report_page() -> None:
     image_result = st.session_state.get("image_result")
     qa_result = st.session_state.get("qa_result")
 
-    if profile is None and qa_result is None:
+    if profile is None and risk_result is None and image_result is None and qa_result is None:
         st.info("请先完成风险问卷或知识图谱问答，再生成综合报告。")
+        return
 
     report_md = build_markdown_report(profile, risk_result, image_result, qa_result)
     st.markdown(report_md)
@@ -270,7 +433,7 @@ def render_report_page() -> None:
 
 page = st.sidebar.radio(
     "功能导航",
-    ["项目总览", "风险问卷", "知识图谱问答", "综合报告", "可选扩展：足部图像演示"],
+    ["项目总览", "风险问卷", "知识图谱问答", "综合报告", "可选扩展：图像与热成像入口"],
 )
 
 if page == "项目总览":

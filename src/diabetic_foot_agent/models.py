@@ -33,6 +33,9 @@ class ImageAnalysisResult:
     modality: str
     summary: str
     alert_level: str
+    source_context: str = ""
+    sample_id: str = ""
+    source_path: str = ""
     findings: list[str] = field(default_factory=list)
     metrics: dict[str, float] = field(default_factory=dict)
 

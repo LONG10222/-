@@ -6,7 +6,13 @@ from PIL import Image
 from diabetic_foot_agent.models import ImageAnalysisResult
 
 
-def analyze_foot_image(image: Image.Image, modality: str) -> ImageAnalysisResult:
+def analyze_foot_image(
+    image: Image.Image,
+    modality: str,
+    source_context: str = "",
+    sample_id: str = "",
+    source_path: str = "",
+) -> ImageAnalysisResult:
     rgb = np.asarray(image.convert("RGB"), dtype=np.float32)
     brightness = rgb.mean(axis=2)
 
@@ -65,7 +71,9 @@ def analyze_foot_image(image: Image.Image, modality: str) -> ImageAnalysisResult
         modality=modality,
         summary=summary,
         alert_level=alert_level,
+        source_context=source_context,
+        sample_id=sample_id,
+        source_path=source_path,
         findings=findings,
         metrics=metrics,
     )
-

@@ -49,15 +49,20 @@ def build_markdown_report(
         lines.append("")
 
     if image_result is not None:
-        lines.extend(
-            [
-                "## 3. 图像提示",
-                f"- 模态类型：{image_result.modality}",
-                f"- 提示等级：{image_result.alert_level}",
-                f"- 结论摘要：{image_result.summary}",
-                "- 图像发现：",
-            ]
-        )
+        image_lines = [
+            "## 3. 图像提示",
+            f"- 模态类型：{image_result.modality}",
+            f"- 提示等级：{image_result.alert_level}",
+            f"- 结论摘要：{image_result.summary}",
+        ]
+        if image_result.source_context:
+            image_lines.append(f"- 来源场景：{image_result.source_context}")
+        if image_result.sample_id:
+            image_lines.append(f"- 样本编号：{image_result.sample_id}")
+        if image_result.source_path:
+            image_lines.append(f"- 样本路径：{image_result.source_path}")
+        image_lines.append("- 图像发现：")
+        lines.extend(image_lines)
         lines.extend([f"  - {item}" for item in image_result.findings])
         lines.append("")
 
