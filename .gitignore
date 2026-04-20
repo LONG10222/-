@@ -4,6 +4,7 @@
 .venv/
 .idea/
 .vscode/
+artifacts/
 __pycache__/
 *.pyc
 *.log

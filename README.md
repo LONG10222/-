@@ -358,6 +358,8 @@ flowchart LR
 - `scripts/fetch_nhanes.sh`：NHANES 下载脚本
 - `scripts/fetch_nhanes.ps1`：Windows PowerShell 下的 NHANES 下载脚本
 - `scripts/prepare_dfuc_index.py`：DFUC 本地样本索引生成脚本
+- `scripts/train_dfuc_baseline.py`：DFUC 最小训练脚手架
+- `scripts/predict_dfuc_baseline.py`：DFUC 单图推理脚手架
 - `scripts/prepare_nhanes.py`：NHANES 合并与底表生成脚本
 - `scripts/prepare_nhanes_features.py`：NHANES 参考特征表生成脚本
 - `src/diabetic_foot_agent/`：风险评估、图像分析、知识问答、报告生成代码
@@ -415,6 +417,15 @@ powershell -ExecutionPolicy Bypass -File scripts/rebuild_env.ps1
 powershell -ExecutionPolicy Bypass -File scripts/fetch_nhanes.ps1 -Force
 python scripts/prepare_nhanes.py
 python scripts/prepare_nhanes_features.py
+```
+
+如需启用 DFUC 的最小训练/推理脚手架，可额外安装视觉依赖：
+
+```powershell
+pip install .[vision]
+python scripts/prepare_dfuc_index.py
+python scripts/train_dfuc_baseline.py
+python scripts/predict_dfuc_baseline.py <image_path> <weights_path>
 ```
 
 ### macOS / Linux

@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+import importlib.util
 
 from PIL import Image
 
@@ -9,6 +10,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from diabetic_foot_agent.dfuc_reference import build_dfuc_index, get_dfuc_sample_options, get_dfuc_summary
+from diabetic_foot_agent.dfuc_model import _require_torch
 from diabetic_foot_agent.image_analysis import analyze_foot_image
 from diabetic_foot_agent.knowledge_graph import answer_question
 from diabetic_foot_agent.models import PatientProfile
@@ -112,3 +114,16 @@ def test_image_analysis_keeps_source_metadata() -> None:
     assert result.source_context == "DFUC 本地样本演示"
     assert result.sample_id == "case_001"
     assert result.source_path == "images/case_001.jpg"
+
+
+def test_dfuc_model_dependency_message_is_actionable() -> None:
+    if importlib.util.find_spec("torch") is not None:
+        assert _require_torch() is not None
+        return
+
+    try:
+        _require_torch()
+    except ImportError as exc:
+        assert "pip install .[vision]" in str(exc)
+    else:
+        raise AssertionError("Expected ImportError when torch is unavailable")

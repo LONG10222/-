@@ -368,6 +368,14 @@ def render_image_page() -> None:
             language="text",
         )
         st.caption("如后续拿到 DFUC 许可数据，优先保持图像与掩膜目录分离，并补一份样本划分文件。")
+        st.markdown("**最小模型入口**")
+        st.code(
+            "pip install .[vision]\n"
+            "python scripts/prepare_dfuc_index.py\n"
+            "python scripts/train_dfuc_baseline.py\n"
+            "python scripts/predict_dfuc_baseline.py <image_path> <weights_path>",
+            language="bash",
+        )
         _render_dfuc_workspace()
         _render_dfuc_sample_preview()
 
