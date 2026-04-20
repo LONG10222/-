@@ -10,7 +10,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from diabetic_foot_agent.dfuc_reference import build_dfuc_index, get_dfuc_sample_options, get_dfuc_summary
-from diabetic_foot_agent.dfuc_model import _require_torch
+from diabetic_foot_agent.dfuc_model import _require_torch, find_dfuc_checkpoint, load_dfuc_training_metadata
 from diabetic_foot_agent.image_analysis import analyze_foot_image
 from diabetic_foot_agent.knowledge_graph import answer_question
 from diabetic_foot_agent.models import PatientProfile
@@ -127,3 +127,17 @@ def test_dfuc_model_dependency_message_is_actionable() -> None:
         assert "pip install .[vision]" in str(exc)
     else:
         raise AssertionError("Expected ImportError when torch is unavailable")
+
+
+def test_find_dfuc_checkpoint_returns_none_for_missing_dir(tmp_path) -> None:
+    assert find_dfuc_checkpoint(tmp_path / "missing_artifacts") is None
+
+
+def test_load_dfuc_training_metadata_reads_json(tmp_path) -> None:
+    artifacts_dir = tmp_path / "dfuc_baseline"
+    artifacts_dir.mkdir(parents=True)
+    metadata_path = artifacts_dir / "dfuc_baseline.json"
+    metadata_path.write_text('{"train_samples": 3, "validation_samples": 1}', encoding="utf-8")
+
+    metadata = load_dfuc_training_metadata(artifacts_dir)
+    assert metadata == {"train_samples": 3, "validation_samples": 1}

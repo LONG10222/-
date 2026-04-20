@@ -32,6 +32,8 @@ class DFUCModelConfig:
     batch_size: int = 4
     epochs: int = 3
     learning_rate: float = 1e-3
+    validation_split: float = 0.2
+    random_seed: int = 42
 
 
 class _DoubleConv:
@@ -98,15 +100,24 @@ def _load_training_rows(index_path: Path | None = None) -> tuple[Path, list[dict
     return dataset_root, df.to_dict(orient="records")
 
 
-def train_dfuc_baseline(
-    output_dir: Path,
-    config: DFUCModelConfig | None = None,
-    index_path: Path | None = None,
-) -> dict[str, Any]:
-    torch, nn, F, DataLoader, Dataset = _require_torch()
-    config = config or DFUCModelConfig()
-    dataset_root, rows = _load_training_rows(index_path=index_path)
+def _split_rows(rows: list[dict[str, Any]], validation_split: float, random_seed: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if len(rows) <= 1 or validation_split <= 0:
+        return rows, []
 
+    rng = np.random.default_rng(random_seed)
+    indices = np.arange(len(rows))
+    rng.shuffle(indices)
+    val_size = max(1, int(round(len(rows) * validation_split)))
+    if val_size >= len(rows):
+        val_size = len(rows) - 1
+
+    val_indices = set(indices[:val_size].tolist())
+    train_rows = [row for idx, row in enumerate(rows) if idx not in val_indices]
+    val_rows = [row for idx, row in enumerate(rows) if idx in val_indices]
+    return train_rows, val_rows
+
+
+def _build_dataset_class(torch: Any, Dataset: Any) -> Any:
     class DFUCDataset(Dataset):
         def __init__(self, root_dir: Path, samples: list[dict[str, Any]], image_size: int) -> None:
             self.root_dir = root_dir
@@ -126,36 +137,93 @@ def train_dfuc_baseline(
             mask_tensor = (mask_tensor > 0.5).float()
             return image_tensor, mask_tensor
 
+    return DFUCDataset
+
+
+def _evaluate_loss(model: Any, dataloader: Any, criterion: Any, torch: Any) -> float:
+    if dataloader is None:
+        return 0.0
+
+    model.eval()
+    total_loss = 0.0
+    batch_count = 0
+    with torch.no_grad():
+        for images, masks in dataloader:
+            logits = model(images)
+            loss = criterion(logits, masks)
+            total_loss += float(loss.item())
+            batch_count += 1
+    return total_loss / max(batch_count, 1)
+
+
+def train_dfuc_baseline(
+    output_dir: Path,
+    config: DFUCModelConfig | None = None,
+    index_path: Path | None = None,
+) -> dict[str, Any]:
+    torch, nn, F, DataLoader, Dataset = _require_torch()
+    config = config or DFUCModelConfig()
+    dataset_root, rows = _load_training_rows(index_path=index_path)
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    dataset = DFUCDataset(dataset_root, rows, config.image_size)
-    dataloader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True)
+    DFUCDataset = _build_dataset_class(torch, Dataset)
+    train_rows, val_rows = _split_rows(rows, config.validation_split, config.random_seed)
+    train_dataset = DFUCDataset(dataset_root, train_rows, config.image_size)
+    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
+    val_loader = None
+    if val_rows:
+        val_dataset = DFUCDataset(dataset_root, val_rows, config.image_size)
+        val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
+
     model = _build_unet(nn, F)
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     criterion = nn.BCEWithLogitsLoss()
 
-    history: list[float] = []
+    history: list[dict[str, float]] = []
+    checkpoints_dir = output_dir / "checkpoints"
+    checkpoints_dir.mkdir(parents=True, exist_ok=True)
+    last_path = checkpoints_dir / "last.pt"
+    best_path = checkpoints_dir / "best.pt"
+    best_val_loss: float | None = None
+
     model.train()
-    for _ in range(config.epochs):
-        epoch_loss = 0.0
+    for epoch in range(config.epochs):
+        model.train()
+        train_loss = 0.0
         batch_count = 0
-        for images, masks in dataloader:
+        for images, masks in train_loader:
             optimizer.zero_grad()
             logits = model(images)
             loss = criterion(logits, masks)
             loss.backward()
             optimizer.step()
-            epoch_loss += float(loss.item())
+            train_loss += float(loss.item())
             batch_count += 1
-        history.append(epoch_loss / max(batch_count, 1))
+        train_loss = train_loss / max(batch_count, 1)
+        val_loss = _evaluate_loss(model, val_loader, criterion, torch) if val_loader is not None else train_loss
+        history.append({"epoch": epoch + 1, "train_loss": train_loss, "val_loss": val_loss})
 
-    weights_path = output_dir / "dfuc_baseline.pt"
+        checkpoint = {
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "epoch": epoch + 1,
+            "config": asdict(config),
+            "train_loss": train_loss,
+            "val_loss": val_loss,
+        }
+        torch.save(checkpoint, last_path)
+        if best_val_loss is None or val_loss <= best_val_loss:
+            best_val_loss = val_loss
+            torch.save(checkpoint, best_path)
+
     metadata_path = output_dir / "dfuc_baseline.json"
-    torch.save(model.state_dict(), weights_path)
     metadata = {
         "config": asdict(config),
-        "train_samples": len(dataset),
+        "train_samples": len(train_rows),
+        "validation_samples": len(val_rows),
         "loss_history": history,
-        "weights_path": str(weights_path),
+        "last_checkpoint_path": str(last_path),
+        "best_checkpoint_path": str(best_path),
     }
     metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     return metadata
@@ -170,8 +238,11 @@ def predict_dfuc_mask(
     torch, nn, F, *_ = _require_torch()
 
     model = _build_unet(nn, F)
-    state_dict = torch.load(weights_path, map_location="cpu")
-    model.load_state_dict(state_dict)
+    checkpoint = torch.load(weights_path, map_location="cpu")
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
     model.eval()
 
     image = Image.open(image_path).convert("RGB")
@@ -193,3 +264,19 @@ def predict_dfuc_mask(
         "max_probability": float(probs.max()),
         "mean_probability": float(probs.mean()),
     }
+
+
+def find_dfuc_checkpoint(output_dir: Path | None = None, checkpoint_name: str = "best.pt") -> Path | None:
+    artifacts_dir = output_dir or (Path("artifacts") / "dfuc_baseline")
+    checkpoint_path = artifacts_dir / "checkpoints" / checkpoint_name
+    if checkpoint_path.exists():
+        return checkpoint_path
+    return None
+
+
+def load_dfuc_training_metadata(output_dir: Path | None = None) -> dict[str, Any] | None:
+    artifacts_dir = output_dir or (Path("artifacts") / "dfuc_baseline")
+    metadata_path = artifacts_dir / "dfuc_baseline.json"
+    if not metadata_path.exists():
+        return None
+    return json.loads(metadata_path.read_text(encoding="utf-8"))

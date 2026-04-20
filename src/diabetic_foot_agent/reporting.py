@@ -10,6 +10,8 @@ def build_markdown_report(
     risk_result: RiskAssessmentResult | None,
     image_result: ImageAnalysisResult | None,
     qa_result: QAResponse | None,
+    dfuc_training_summary: dict | None = None,
+    dfuc_inference_summary: dict | None = None,
 ) -> str:
     lines = [
         "# 糖尿病足风险提示与中医护理宣教报告",
@@ -78,9 +80,43 @@ def build_markdown_report(
         lines.extend([f"  - {item}" for item in qa_result.evidence])
         lines.append("")
 
+    if dfuc_training_summary is not None:
+        lines.extend(
+            [
+                "## 5. DFUC 训练摘要",
+                f"- 训练样本数：{dfuc_training_summary.get('train_samples', 'NA')}",
+                f"- 验证样本数：{dfuc_training_summary.get('validation_samples', 'NA')}",
+                f"- 最佳 checkpoint：{dfuc_training_summary.get('best_checkpoint_path', 'NA')}",
+                f"- 最新 checkpoint：{dfuc_training_summary.get('last_checkpoint_path', 'NA')}",
+            ]
+        )
+        loss_history = dfuc_training_summary.get("loss_history") or []
+        if loss_history:
+            last_epoch = loss_history[-1]
+            lines.extend(
+                [
+                    f"- 最后一轮训练损失：{last_epoch.get('train_loss', 'NA')}",
+                    f"- 最后一轮验证损失：{last_epoch.get('val_loss', 'NA')}",
+                ]
+            )
+        lines.append("")
+
+    if dfuc_inference_summary is not None:
+        lines.extend(
+            [
+                "## 6. DFUC 推理摘要",
+                f"- 输入图像：{dfuc_inference_summary.get('image_path', 'NA')}",
+                f"- 使用权重：{dfuc_inference_summary.get('weights_path', 'NA')}",
+                f"- 输出掩膜：{dfuc_inference_summary.get('output_mask_path', 'NA')}",
+                f"- 最大概率：{dfuc_inference_summary.get('max_probability', 'NA')}",
+                f"- 平均概率：{dfuc_inference_summary.get('mean_probability', 'NA')}",
+            ]
+        )
+        lines.append("")
+
     lines.extend(
         [
-            "## 5. 总结",
+            "## 7. 总结",
             "- 建议将问卷结果、图像提示和线下体检结果联合判断。",
             "- 本报告不进行糖尿病足临床确诊，仅提供高危因素解释、就医建议和护理宣教参考。",
             "- 如存在破损、溃疡、感染、明显红肿或快速加重的不适，应及时线下就医。",

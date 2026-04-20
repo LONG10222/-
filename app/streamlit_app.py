@@ -17,6 +17,7 @@ from diabetic_foot_agent import (
     analyze_foot_image,
     answer_question,
     build_markdown_report,
+    find_dfuc_checkpoint,
     get_dfuc_sample_options,
     get_dfuc_summary,
     build_sample_options,
@@ -24,6 +25,8 @@ from diabetic_foot_agent import (
     get_dfuc_preview_samples,
     get_extension_dataset_statuses,
     get_cohort_summary,
+    load_dfuc_training_metadata,
+    predict_dfuc_mask,
     save_dfuc_index,
 )
 from diabetic_foot_agent.models import PatientProfile
@@ -198,6 +201,35 @@ def _render_dfuc_workspace() -> None:
         st.session_state["image_result"] = result
         st.session_state["image_preview"] = image
         st.success("已将所选 DFUC 样本载入图像演示分析。")
+
+    checkpoint_path = find_dfuc_checkpoint(PROJECT_ROOT / "artifacts" / "dfuc_baseline")
+    if checkpoint_path is not None:
+        st.caption(f"检测到本地 checkpoint：{checkpoint_path}")
+        if st.button("使用本地 DFUC checkpoint 执行分割推理", use_container_width=False):
+            try:
+                output_mask = PROJECT_ROOT / "artifacts" / "dfuc_baseline" / f"{selected_sample['sample_id']}_pred_mask.png"
+                inference_result = predict_dfuc_mask(image_path, checkpoint_path, output_mask)
+                st.session_state["dfuc_pred_mask_path"] = inference_result["output_mask_path"]
+                st.session_state["dfuc_pred_stats"] = inference_result
+                st.session_state["dfuc_selected_sample"] = selected_sample
+                st.success("DFUC 本地推理已完成。")
+            except ImportError as exc:
+                st.error(str(exc))
+            except Exception as exc:
+                st.error(f"DFUC 推理失败：{exc}")
+    else:
+        st.info("当前未检测到本地 DFUC checkpoint。先执行训练脚本后，这里会开放分割推理按钮。")
+
+    pred_mask_path = st.session_state.get("dfuc_pred_mask_path")
+    pred_stats = st.session_state.get("dfuc_pred_stats")
+    if pred_mask_path:
+        pred_col1, pred_col2 = st.columns(2)
+        with pred_col1:
+            st.image(pred_mask_path, caption="预测掩膜", use_container_width=True)
+        with pred_col2:
+            if pred_stats:
+                st.metric("最大概率", f"{pred_stats['max_probability']:.4f}")
+                st.metric("平均概率", f"{pred_stats['mean_probability']:.4f}")
 
 
 def render_risk_page() -> None:
@@ -424,13 +456,48 @@ def render_report_page() -> None:
     risk_result = st.session_state.get("risk_result")
     image_result = st.session_state.get("image_result")
     qa_result = st.session_state.get("qa_result")
+    dfuc_training_summary = load_dfuc_training_metadata(PROJECT_ROOT / "artifacts" / "dfuc_baseline")
+    dfuc_pred_stats = st.session_state.get("dfuc_pred_stats")
+    dfuc_pred_mask_path = st.session_state.get("dfuc_pred_mask_path")
 
-    if profile is None and risk_result is None and image_result is None and qa_result is None:
+    if (
+        profile is None
+        and risk_result is None
+        and image_result is None
+        and qa_result is None
+        and dfuc_training_summary is None
+        and dfuc_pred_stats is None
+    ):
         st.info("请先完成风险问卷或知识图谱问答，再生成综合报告。")
         return
 
-    report_md = build_markdown_report(profile, risk_result, image_result, qa_result)
+    report_md = build_markdown_report(
+        profile,
+        risk_result,
+        image_result,
+        qa_result,
+        dfuc_training_summary=dfuc_training_summary,
+        dfuc_inference_summary=dfuc_pred_stats,
+    )
     st.markdown(report_md)
+
+    if dfuc_training_summary is not None:
+        st.subheader("DFUC 训练结果")
+        metric1, metric2 = st.columns(2)
+        metric1.metric("训练样本", dfuc_training_summary.get("train_samples", "NA"))
+        metric2.metric("验证样本", dfuc_training_summary.get("validation_samples", "NA"))
+        loss_history = dfuc_training_summary.get("loss_history") or []
+        if loss_history:
+            st.dataframe(pd.DataFrame(loss_history), hide_index=True, use_container_width=True)
+
+    if dfuc_pred_stats is not None:
+        st.subheader("DFUC 推理结果")
+        metric1, metric2 = st.columns(2)
+        metric1.metric("最大概率", f"{dfuc_pred_stats['max_probability']:.4f}")
+        metric2.metric("平均概率", f"{dfuc_pred_stats['mean_probability']:.4f}")
+        if dfuc_pred_mask_path:
+            st.image(dfuc_pred_mask_path, caption="DFUC 预测掩膜", use_container_width=False)
+
     st.download_button(
         label="下载 Markdown 报告",
         data=report_md.encode("utf-8"),
