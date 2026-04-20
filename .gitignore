@@ -1,0 +1,9 @@
+.DS_Store
+.pytest_cache/
+.streamlit/
+.venv/
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+*.log

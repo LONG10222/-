@@ -1,0 +1,141 @@
+dataset_name: diabetic_foot_multimodal_dataset_v1
+description: Unified schema for diabetic foot risk screening, multimodal image metadata, and evidence-backed knowledge graph.
+
+tables:
+  patient_profile:
+    primary_key: patient_id
+    fields:
+      - name: patient_id
+        type: string
+        required: true
+      - name: age
+        type: integer
+        required: true
+      - name: sex
+        type: string
+        required: true
+      - name: diabetes_duration_years
+        type: integer
+        required: true
+      - name: hba1c
+        type: float
+        required: false
+      - name: smoking_status
+        type: boolean
+        required: false
+      - name: numbness
+        type: boolean
+        required: false
+      - name: tingling
+        type: boolean
+        required: false
+      - name: foot_pain
+        type: boolean
+        required: false
+      - name: sensory_loss
+        type: boolean
+        required: false
+      - name: ulcer_history
+        type: boolean
+        required: false
+      - name: infection_history
+        type: boolean
+        required: false
+      - name: abi
+        type: float
+        required: false
+      - name: risk_level
+        type: string
+        required: false
+
+  image_record:
+    primary_key: image_id
+    fields:
+      - name: image_id
+        type: string
+        required: true
+      - name: patient_id
+        type: string
+        required: true
+      - name: modality
+        type: string
+        required: true
+      - name: source_dataset
+        type: string
+        required: true
+      - name: file_path
+        type: string
+        required: true
+      - name: label
+        type: string
+        required: false
+      - name: mask_path
+        type: string
+        required: false
+      - name: acquisition_note
+        type: string
+        required: false
+
+  knowledge_node:
+    primary_key: node_id
+    fields:
+      - name: node_id
+        type: string
+        required: true
+      - name: node_name
+        type: string
+        required: true
+      - name: node_type
+        type: string
+        required: true
+      - name: synonyms
+        type: list[string]
+        required: false
+
+  knowledge_edge:
+    primary_key: edge_id
+    fields:
+      - name: edge_id
+        type: string
+        required: true
+      - name: subject
+        type: string
+        required: true
+      - name: predicate
+        type: string
+        required: true
+      - name: object
+        type: string
+        required: true
+      - name: evidence_id
+        type: string
+        required: false
+      - name: evidence_type
+        type: string
+        required: false
+      - name: evidence_year
+        type: integer
+        required: false
+
+  evidence_source:
+    primary_key: evidence_id
+    fields:
+      - name: evidence_id
+        type: string
+        required: true
+      - name: title
+        type: string
+        required: true
+      - name: source_org
+        type: string
+        required: false
+      - name: source_type
+        type: string
+        required: true
+      - name: year
+        type: integer
+        required: false
+      - name: note
+        type: string
+        required: false
+

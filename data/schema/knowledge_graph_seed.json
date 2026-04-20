@@ -1,0 +1,63 @@
+[
+  {
+    "subject": "糖尿病周围神经病变",
+    "predicate": "表现为",
+    "object": "麻木",
+    "evidence": "CDC 糖尿病相关神经病变与足部健康教育资料"
+  },
+  {
+    "subject": "糖尿病周围神经病变",
+    "predicate": "表现为",
+    "object": "刺痛",
+    "evidence": "CDC 糖尿病相关神经病变与足部健康教育资料"
+  },
+  {
+    "subject": "高 HbA1c",
+    "predicate": "增加",
+    "object": "糖尿病足风险",
+    "evidence": "糖尿病足指南与临床综述共识"
+  },
+  {
+    "subject": "病程长",
+    "predicate": "增加",
+    "object": "糖尿病足风险",
+    "evidence": "糖尿病足指南与临床综述共识"
+  },
+  {
+    "subject": "足部溃疡",
+    "predicate": "提示",
+    "object": "尽快线下就医",
+    "evidence": "IDF 糖尿病足管理指南"
+  },
+  {
+    "subject": "感染表现",
+    "predicate": "提示",
+    "object": "尽快线下就医",
+    "evidence": "IDF 糖尿病足管理指南"
+  },
+  {
+    "subject": "每日足部检查",
+    "predicate": "有助于",
+    "object": "早期发现异常",
+    "evidence": "CDC 足部健康教育建议"
+  },
+  {
+    "subject": "推拿",
+    "predicate": "适用于",
+    "object": "足部不适辅助管理",
+    "evidence": "中医外治辅助管理经验总结"
+  },
+  {
+    "subject": "穴位按压",
+    "predicate": "适用于",
+    "object": "足部不适辅助管理",
+    "evidence": "中医外治辅助管理经验总结"
+  },
+  {
+    "subject": "足部减压",
+    "predicate": "有助于",
+    "object": "降低溃疡加重风险",
+    "evidence": "糖尿病足护理与管理建议"
+  }
+]
+
