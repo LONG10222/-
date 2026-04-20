@@ -31,6 +31,7 @@
 ### 扩展 1
 
 - DFUC 足溃疡图像演示模块（首选图像扩展路线）
+- 支持本地样本扫描、样本预览、训练面板和 checkpoint 推理
 
 ### 扩展 2
 
@@ -354,6 +355,7 @@ flowchart LR
 - `data/raw/dfuc/`：DFUC 图像扩展数据预留目录
 - `data/processed/nhanes_risk_base.csv`：第一版 NHANES 风险底表
 - `data/processed/dfuc_image_index.csv`：DFUC 本地图像索引（放入图像后可生成）
+- `artifacts/dfuc_baseline/`：DFUC 训练产物目录（训练元数据与 checkpoint）
 - `app/streamlit_app.py`：可直接运行的网页原型
 - `scripts/fetch_nhanes.sh`：NHANES 下载脚本
 - `scripts/fetch_nhanes.ps1`：Windows PowerShell 下的 NHANES 下载脚本
@@ -428,6 +430,29 @@ python scripts/train_dfuc_baseline.py
 python scripts/predict_dfuc_baseline.py <image_path> <weights_path>
 ```
 
+训练完成后会在 `artifacts/dfuc_baseline/` 下生成：
+
+- `checkpoints/best.pt`：最佳验证损失对应的 checkpoint
+- `checkpoints/last.pt`：最后一轮 checkpoint
+- `dfuc_baseline.json`：训练元数据，包含 `train/val loss`、`IoU`、`Dice` 等指标历史
+
+此后重新打开 Streamlit 页面，`DFUC 数据入口` 会自动显示：
+
+- 本地 DFUC 样本统计与预览
+- 训练样本数、验证样本数、最佳验证损失
+- `train/val loss` 曲线
+- `train/val IoU` 与 `train/val Dice` 曲线
+- 基于 `best.pt` 的本地分割推理按钮
+
+建议的 DFUC 最小流程如下：
+
+```powershell
+pip install .[vision]
+python scripts/prepare_dfuc_index.py
+python scripts/train_dfuc_baseline.py
+streamlit run app/streamlit_app.py
+```
+
 ### macOS / Linux
 
 ```bash
@@ -448,7 +473,8 @@ streamlit run app/streamlit_app.py
 ## 当前原型的能力边界
 
 - 风险评估模块目前是规则驱动原型，便于先跑通课程演示。
-- 图像模块目前是启发式分析，不等同于真实医学影像模型。
+- 图像模块当前分为两层：默认启发式分析演示，以及可选的 DFUC 分割 baseline。
+- DFUC baseline 已支持 `BCE + Dice loss`、训练/验证划分、`IoU`/`Dice` 指标统计和 checkpoint 推理，但仍属于课程项目 baseline，不代表可直接用于临床。
 - 知识问答目前基于种子图谱与关键词检索，后续可接向量检索或 LLM。
 - 报告模块强调“风险提示与健康教育”，不输出诊断性结论。
 
@@ -471,7 +497,7 @@ streamlit run app/streamlit_app.py
 2. 补充数据卡和数据处理脚本，形成更规范的数据接入流程。
 3. 将图谱切换到 Neo4j 或图数据库服务，补充证据链字段。
 4. 给问答模块增加 RAG 与引用展示。
-5. 将 DFUC 图像模块做成可选增强，而不是主流程前置依赖。
+5. 在 DFUC baseline 上继续补充 Dice/IoU 之外的验证输出、可视化样本和更稳妥的数据划分策略。
 6. 增加 PDF 报告导出和病例历史记录。
 
 ## 参考资料
